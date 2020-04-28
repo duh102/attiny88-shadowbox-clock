@@ -6,6 +6,8 @@
 #include "hsv_rgb.h"
 #include <stdbool.h>
 #include <avr/pgmspace.h>
+#include "twimaster/i2cmaster.h"
+#include "mcp7940_tiny.h"
 
 const uint32_t states[10][3] PROGMEM = {
   {0b11111111, 0b11111001, 0b1111}, //0
@@ -24,6 +26,7 @@ uint8_t digit_value;
 uint8_t temp0;
 
 #define DOUT PC7
+#define SQW PD2
 #define HH PB6
 #define MM PB7
 #define UPMIN (1<<MM)
@@ -32,8 +35,7 @@ uint8_t temp0;
 volatile uint8_t buttonDown = 0;
 volatile bool checkButton = false;
 volatile bool updateDigits = false;
-bool led = false;
-#define _USE_DELAY
+volatile bool led = false;
 
 
 #define MAX_LED 128
@@ -60,29 +62,24 @@ uint8_t colors[MAX_LED][3];
 #define SS_1 108
 
 
-uint8_t seconds = 0;
-uint8_t minutes = 0;
-uint8_t hours = 0;
-volatile uint8_t pSec = 0, qSec = 0;
-#define QSEC_MAX 128
+volatile uint8_t seconds = 99;
+volatile uint8_t minutes = 99;
+volatile uint8_t hours = 99;
 
 ISR(PCINT0_vect) {
   checkButton=true;
 }
-#ifndef _USE_DELAY
 ISR(INT0_vect) {
-  pSec++;
-  if(!pSec) {
-    qSec++;
-  }
+  seconds++;
+  led = !led;
+  updateDigits = true;
 }
-#endif
 
 void updateDisplay();
 void loop();
 
 int main() {
-  CLKPR = 0x80;   // allow writes to CLKPSR
+  CLKPR = 1<<CLKPCE;   // allow writes to CLKPR
   CLKPR = 0;   // disable system clock prescaler (run at full 8MHz)
 
   //setup PCI1 for PCINT6 and 7, for PB6 and 7
@@ -94,52 +91,61 @@ int main() {
   DDRB = (uint8_t)( ~(UPMIN | UPHOUR));
   PORTB |= (UPMIN | UPHOUR);
 
-#ifndef _USE_DELAY
   // Setup INT0 to trigger on falling edge
-  EICRA |= (1<<ISC01) | (1<<ISC00);
+  EICRA = 1<<ISC01;
   // Setup INT0 to be enabled
-  EIMSK |= 1<<INT0;
-#endif
+  EIMSK = 1<<INT0;
 
+  // Enable the display
   ws2812_init();
+
+  // Enable I2C communication
+  i2c_init();
+  // Enable the RTC
+  uint8_t failCode = 1;
+  while(failCode) {
+    failCode = mcp7940_init();
+    if(failCode) {
+      _delay_ms(100);
+    }
+  }
+
+  mcp7940_setControlRegister( (1<<MCP7940_SQWEN) | SQWV_1HZ );
+
+  mcp7940_setBatteryBackup(true);
+
+  seconds = mcp7940_getSeconds();
+
+  minutes = mcp7940_getMinutes();
+
+  // bit 5 indicates whether we're in 12 or 24 hour mode
+  hours = mcp7940_getHours();
+
+  if(hours & (1<<5)) {
+    //we want to be in 24 hour mode
+    mcp7940_setHours( (hours&(1<<4)?12:0) + (hours&0b111), false);
+    hours = mcp7940_getHours();
+  }
+  hours = hours & 0b11111;
+
   updateDigits=true;
-
-  sei();
-
   while(1) {
     loop();
   }
 }
 
 void loop() {
-#ifndef _USE_DELAY
-  if(qSec >= QSEC_MAX) {
-    qSec-= QSEC_MAX;
-#endif
-#ifdef _USE_DELAY
-  if(qSec >= 10) {
-    qSec = 0;
-#endif
-    led = !led;
-    seconds++;
-    if(seconds == 60) {
-      seconds = 0;
-      minutes++;
-      if(minutes == 60) {
-        minutes = 0;
-        hours++;
-        if(hours == 24) {
-          hours = 0;
-        }
-      }
+  if(seconds>59) {
+    seconds = seconds % 60;
+    minutes++;
+    if(minutes == 60) {
+      minutes = mcp7940_getMinutes();
+      hours = mcp7940_getHours();
+      hours = hours & 0b11111;
     }
-    updateDigits = true;
   }
   if(!checkButton && !updateDigits) {
     _delay_ms(100);
-#ifdef _USE_DELAY
-    qSec++;
-#endif
     return;
   }
   if(checkButton) {
@@ -151,11 +157,16 @@ void loop() {
     } else {
       if(buttonDown == 0) {
         buttonDown = BUTTONDOWN_RESET;
-        minutes = (minutes + (buttonState&UPMIN? 1 : 0)) % 60;
         if(buttonState&UPMIN) {
+          minutes = (minutes + 1) % 60;
           seconds = 0;
+          mcp7940_setSeconds(seconds, true);
+          mcp7940_setMinutes(minutes);
         }
-        hours = (hours + (buttonState&UPHOUR? 1 : 0)) % 24;
+        if(buttonState&UPHOUR) {
+          hours = (hours + 1) % 24;
+          mcp7940_setHours(hours, false);
+        }
         updateDigits = true;
       }
       buttonDown--;
