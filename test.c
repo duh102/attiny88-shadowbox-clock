@@ -254,7 +254,7 @@ void updateDisplay() {
     getRGB(state+(3*curLed), 50, colors[curLed]);
   }
   // seconds 1s digit
-  digit_value = minutes % 10;
+  digit_value = seconds % 10;
   for(curLed = SS_1; curLed < MAX_LED; curLed++) {
     temp0 = curLed-SS_1;
     if( !(pgm_read_byte(&states[digit_value][temp0/8]) & (1<<(temp0%8))) ) {
