@@ -133,3 +133,11 @@ void mcp7940_setBatteryBackup(bool enabled) {
   i2c_write(curSetting);
   i2c_stop();
 }
+
+// Set the OSCTRIM register to set the value of the trimming
+void mcp7940_setTrim(uint8_t newValue) {
+  i2c_start_wait(MCP7940_ADDR + I2C_WRITE);
+  i2c_write(MCP7940_OSCTRIM);
+  i2c_write(newValue);
+  i2c_stop();
+}

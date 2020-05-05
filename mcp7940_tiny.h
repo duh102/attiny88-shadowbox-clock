@@ -89,4 +89,7 @@ void mcp7940_setHours(uint8_t newHours, bool set12Hour);
 //  The device will not be externally operational, however, so i2c and the MFP will be disabled
 void mcp7940_setBatteryBackup(bool enabled);
 
+// Set the OSCTRIM register to set the value of the trimming
+void mcp7940_setTrim(uint8_t newValue);
+
 #endif //_MCP7940_TINY
