@@ -115,7 +115,8 @@ int main() {
   mcp7940_setBatteryBackup(true);
   
   // Adjust this for your particular crystal, mine's 182ppm fast, so set the register to 91 (bit 7 is 0, for fast time, and then 0-6 is 91)
-  mcp7940_setTrim(0b1011011);
+  // Second iteration, it was 35 ppm too slow, so now we need to tune it to 147ppm too fast, so set the register to 74 (ceil 73.5)
+  mcp7940_setTrim(0b1001010);
 
   seconds = mcp7940_getSeconds();
 
