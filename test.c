@@ -32,6 +32,10 @@ uint8_t temp0;
 #define UPMIN (1<<MM)
 #define UPHOUR (1<<HH)
 #define BUTTONDOWN_RESET 20
+// 0: Use 12 h clock
+// 1: Use 24 h clock
+#define USE_12H 0
+
 volatile uint8_t buttonDown = 0;
 volatile bool checkButton = false;
 volatile bool updateDigits = false;
@@ -116,7 +120,7 @@ int main() {
   
   // Adjust this for your particular crystal, mine's 182ppm fast, so set the register to 91 (bit 7 is 0, for fast time, and then 0-6 is 91)
   // Second iteration, it was 35 ppm too slow, so now we need to tune it to 147ppm too fast, so set the register to 74 (ceil 73.5)
-  mcp7940_setTrim(0b1001010);
+  mcp7940_setTrim(0b00111000);
 
   seconds = mcp7940_getSeconds();
 
@@ -125,11 +129,19 @@ int main() {
   // bit 5 indicates whether we're in 12 or 24 hour mode
   hours = mcp7940_getHours();
 
+#if USE_12H == 0
   if(hours & (1<<5)) {
     //we want to be in 24 hour mode
     mcp7940_setHours( (hours&(1<<4)?12:0) + (hours&0b111), false);
     hours = mcp7940_getHours();
   }
+#else
+  if(! (hours & (1<<5))) {
+    //we want to be in 12 hour mode
+    mcp7940_setHours( hours, true);
+    hours = mcp7940_getHours();
+  }
+#endif // USE_12H
   hours = hours & 0b11111;
 
   updateDigits=true;
