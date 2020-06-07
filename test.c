@@ -32,9 +32,9 @@ uint8_t temp0;
 #define UPMIN (1<<MM)
 #define UPHOUR (1<<HH)
 #define BUTTONDOWN_RESET 20
-// 0: Use 12 h clock
-// 1: Use 24 h clock
-#define USE_12H 0
+// 1: Use 12 h clock
+// 0: Use 24 h clock
+#define USE_12H 1
 
 volatile uint8_t buttonDown = 0;
 volatile bool checkButton = false;
@@ -181,7 +181,7 @@ void loop() {
         }
         if(buttonState&UPHOUR) {
           hours = (hours + 1) % 24;
-          mcp7940_setHours(hours, false);
+          mcp7940_setHours(hours, USE_12H != 0);
         }
         updateDigits = true;
       }
